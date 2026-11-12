@@ -1,0 +1,106 @@
+Column Name,Aggregation,Source,Description
+active_fitbit__awake__sum,1 day,Evidation,Number of minutes fitbit is being worn and recording data when awake
+active_fitbit__sum,1 day,Evidation,Number of minutes fitbit is worn and recording data
+"heart_rate__asleep__max,1 day,Evidation,""Maximum HR while """"asleep"""" sleep pattern"""
+"heart_rate__asleep__mean,1 day,Evidation,""Mean HR while """"asleep"""" sleep pattern"""
+"heart_rate__asleep__stddev,1 day,Evidation,""Standard deviation of HR while """"asleep"""" sleep pattern"""
+heart_rate__autocorr10min,1 day,Evidation,Correlation between each HR value and the value measured 10 minutes before it
+heart_rate__autocorr1min,1 day,Evidation,Correlation between each HR value and the value measured 1 minute before it
+heart_rate__autocorr2min,1 day,Evidation,Correlation between each HR value and the value measured 2 minutes before it
+heart_rate__autocorr3min,1 day,Evidation,Correlation between each HR value and the value measured 3 minutes before it
+heart_rate__autocorr60min,1 day,Evidation,Correlation between each HR value and the value measured 60 minutes before it
+heart_rate__awake__max,1 day,Evidation,Maximum HR while awake
+heart_rate__awake__mean,1 day,Evidation,Mean HR while awake
+heart_rate__awake__stddev,1 day,Evidation,Standard deviation of HR while awake
+heart_rate__count,1 day,Evidation,Number of minutes with HR > 0
+heart_rate__high_150_perc_resting_frac,1 day,Evidation,Percent of minutes with HR larger than 1.5x resting HR for the day
+heart_rate__high_200_perc_resting_frac,1 day,Evidation,Percent of minutes with HR larger than 2.0x resting HR for the day
+heart_rate__max,1 day,Evidation,Maximum HR
+heart_rate__mean,1 day,Evidation,Mean HR
+heart_rate__median,1 day,Evidation,Median HR
+heart_rate__min,1 day,Evidation,Minimum HR
+heart_rate__not_moving__max,1 day,Evidation,Maximum HR while not moving
+heart_rate__not_moving__mean,1 day,Evidation,Mean HR while not moving
+heart_rate__not_moving__stddev,1 day,Evidation,Standard deviation of HR while not moving
+heart_rate__peaks,1 day,Evidation,Number of relative HR peaks in a day
+heart_rate__peaks_gt_125_perc_median,1 day,Evidation,Number of peaks larger than 1.25x the median HR for the day
+heart_rate__peaks_gt_150_perc_median,1 day,Evidation,Number of peaks larger than 1.5x the median HR for the day
+heart_rate__peaks_gt_200_perc_median,1 day,Evidation,Number of peaks larger than 2.0x the median HR for the day
+heart_rate__perc_25th,1 day,Evidation,25th percentile of HR
+heart_rate__perc_50th,1 day,Evidation,50th percentile of HR
+heart_rate__perc_5th,1 day,Evidation,5th percentile of HR
+heart_rate__perc_75th,1 day,Evidation,75th percentile of HR
+heart_rate__perc_95th,1 day,Evidation,95th percentile of HR
+heart_rate__quant_95th_to_resting_ratio,1 day,Evidation,Ratio of 95th percentile HR in a day to the day's resting HR
+heart_rate__resting_heart_rate,1 day,Fitbit,Resting HR 
+heart_rate__stddev,1 day,Evidation,Standard deviation of HR
+"sleep__asleep__mean,1 day,Evidation,""Proportion of sleep minutes in """"asleep"""" sleep pattern"""
+"sleep__asleep__sum,1 day,Evidation,""Minutes of """"asleep"""" sleep pattern"""
+"sleep__awake__mean,1 day,Evidation,""Proportion of sleep minutes in """"restless"""" or """"awake"""" sleep patterns"""
+"sleep__awake__sum,1 day,Evidation,""Minutes of """"restless"""" and """"awake"""" sleep patterns"""
+"sleep__awake_regions__countDistinct,1 day,Evidation,""Count of distinct streaks where """"awake"""" or """"restless"""""""
+"sleep__loop_main_asleep_frac,1 day,Evidation,""Fraction of minutes during the main sleep spent in """"asleep"""" sleep pattern"""
+"sleep__loop_main_asleep_minutes,1 day,Evidation,""Minutes in the main sleep spent in """"asleep"""" sleep pattern"""
+"sleep__loop_main_awake_frac,1 day,Evidation,""Fraction of minutes during the main sleep spent  in """"restless"""" or """"awake"""" sleep patterns"""
+"sleep__loop_main_awake_minutes,1 day,Evidation,""Minutes in the main sleep spent  in """"restless"""" or """"awake"""" sleep patterns"""
+"sleep__loop_main_awake_region_count,1 day,Evidation,""Number of contiguous regions in """"restless"""" or """"awake"""" sleep patterns"""
+"sleep__loop_main_really_awake_frac,1 day,Evidation,""Fraction of minutes during the main sleep spent in """"awake"""" sleep pattern"""
+"sleep__loop_main_really_awake_minutes,1 day,Evidation,""Minutes in the main sleep spent in """"awake"""" sleep pattern"""
+"sleep__loop_main_really_awake_region_count,1 day,Evidation,""Number of contiguous regions in """"awake"""" sleep pattern"""
+sleep__loop_main_to_wakeup_minutes,1 day,Evidation,Minutes in bed after waking up
+sleep__loop_main_until_sleep_minutes,1 day,Evidation,Minutes in bed before fallling asleep
+sleep__main_asleep_minutes,1 day,Fitbit,Minutes asleep for only the main sleep
+sleep__main_efficiency,1 day,Fitbit,Sleep efficiency score during main sleep
+sleep__main_in_bed_minutes,1 day,Fitbit,Number of minutes in bed for only the main sleep of the day
+sleep__main_start_minute,1 day,Fitbit,Minute of the day when the main sleep starts
+sleep__main_start_time,1 day,Fitbit,Datetime of main sleep start
+sleep__nap_count,1 day,Fitbit,Number of naps
+sleep__num_sleeps,1 day,Fitbit,Number of sleeps (main sleep + naps) in a day
+"sleep__really_awake__mean,1 day,Evidation,""Proportion of sleep minutes in """"awake"""" sleep pattern"""
+"sleep__really_awake__sum,1 day,Evidation,""Minutes of """"awake"""" sleep pattern"""
+"sleep__really_awake_regions__countDistinct,1 day,Evidation,""Count of contiguous regions of """"awake"""" sleep"""
+"sleep__sleeping__sum,1 day,Evidation,""Minutes of """"asleep"""", """"restless"""", and """"awake"""" sleep patterns"""
+sleep__total_asleep_minutes,1 day,Fitbit,Minutes asleep
+sleep__total_in_bed_minutes,1 day,Fitbit,Minutes in bed
+steps__count,1 day,Evidation,Number of minutes with > 0 steps
+steps__dec_time__max,1 day,Evidation,Decimal time of max steps minute taken of the day
+steps__dec_time__min,1 day,Evidation,Decimal time of min steps minute taken of the day
+steps__dec_time_max_rolling_6__first,1 day,Evidation,Decimal time of max of 6-minute rolling steps sum
+steps__first_step_dec_time,1 day,Evidation,Decimal time of first step taken of the day
+steps__gt10_nonzero_frac,1 day,Evidation,Fraction of minutes with > 10 steps out of non-zero
+steps__gt100_nonzero_frac,1 day,Evidation,Fraction of minutes with > 100 steps out of non-zero
+steps__gt140_nonzero_frac,1 day,Evidation,Proportion of minutes with > 140 steps among all minutes with non-zero steps
+steps__gt50_nonzero_frac,1 day,Evidation,Proportion of minutes with > 50 steps among all minutes with non-zero steps
+steps__last_step_dec_time,1 day,Evidation,Decimal time of last step taken of the day
+steps__light_activity__sum,1 day,Evidation,Number of minutes of light activity (between 50 and 100 steps per minute)
+steps__max_rolling_1,1 day,Evidation,Max of 1-minute rolling sum
+steps__max_rolling_10,1 day,Evidation,Max of 10-minute rolling sum
+steps__max_rolling_3,1 day,Evidation,Max of 3-minute rolling sum
+steps__max_rolling_30,1 day,Evidation,Max of 30-minute rolling sum
+steps__max_rolling_6,1 day,Evidation,Max of 6-minute rolling sum
+steps__max_rolling_60,1 day,Evidation,Max of 60-minute rolling sum
+steps__max_rolling_dec_time_1,1 day,Evidation,Decimal time of max of 1-minute rolling sum
+steps__max_rolling_dec_time_10,1 day,Evidation,Decimal time of max of 10-minute rolling sum
+steps__max_rolling_dec_time_3,1 day,Evidation,Decimal time of max of 3-minute rolling sum
+steps__max_rolling_dec_time_30,1 day,Evidation,Decimal time of max of 30-minute rolling sum
+steps__max_rolling_dec_time_6,1 day,Evidation,Decimal time of max of 6-minute rolling sum
+steps__max_rolling_dec_time_60,1 day,Evidation,Decimal time of max of 60-minute rolling sum
+steps__midday_steps_dec_time,1 day,Evidation,Decimal time at which steps taken equals steps to be taken
+steps__mvpa__sum,1 day,Evidation,Number of minutes of moderate or vigorous physical activity (> 100 steps per minute)
+steps__non_zero_frac,1 day,Evidation,Fraction of minutes with non-zero steps
+steps__nonzero_50quantile,1 day,Evidation,50th quantile of non-zero steps distribution
+steps__nonzero_5quantile,1 day,Evidation,5th quantile of non-zero steps distribution
+steps__nonzero_95quantile,1 day,Evidation,95th quantile of non-zero steps distribution
+steps__not_moving__sum,1 day,Evidation,Number of steps where not moving
+steps__rolling_6_sum__max,1 day,Evidation,Maximum 6-minute rolling steps sum
+steps__sedentary__sum,1 day,Evidation,Number of minutes when step count is less than 50 steps
+steps__streaks__countDistinct,1 day,Evidation,Number of consecutive non-zero step streaks
+steps__sum,1 day,Evidation,Number of steps
+"activity_seconds,event-based,Fitbit,""Seconds of run, bike, swim, or exercise event"""
+bmi,event-based,Fitbit,BMI measured for weight event
+"calories_burned,event-based,Fitbit,""Calories burned for run, bike, swim, or exercise event"""
+calories_eaten,event-based,Fitbit,Calories eaten for food event
+fat_percentage,event-based,Fitbit,Fat percentage for fat event
+run_meters,event-based,Fitbit,Meters run for run event
+run_steps,event-based,Fitbit,Steps run for run event
+weight_kg,event-based,Fitbit,Weight in kg measured for weight event

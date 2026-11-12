@@ -1,0 +1,6 @@
+,pred_not_at_all,pred_a_little_bit,pred_somewhat,pred_quite_a_bit,pred_very_much
+not_at_all,58,151,14,1,2
+a_little_bit,23,329,7,5,2
+somewhat,13,182,6,3,1
+quite_a_bit,27,134,5,0,1
+very_much,0,81,4,3,0

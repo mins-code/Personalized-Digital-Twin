@@ -1,0 +1,39 @@
+question_number,question_label,question_text,is_multiple_response,answer_encoding,answer_text
+1,day_rating,How was your day yesterday?,False,bad,Bad
+1,day_rating,How was your day yesterday?,False,good,Good
+1,day_rating,How was your day yesterday?,False,average,Average
+2,usual_activities_problems,"Did you have problems in doing your  usual activities  (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,slight_problems,Slight problems
+2,usual_activities_problems,"Did you have problems in doing your  usual activities  (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,moderate_problems,Moderate problems
+2,usual_activities_problems,"Did you have problems in doing your  usual activities  (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,extreme_problems,Extreme problems
+2,usual_activities_problems,"Did you have problems in doing your  usual activities  (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,not_at_all,Not at all
+2,usual_activities_problems,"Did you have problems in doing your  usual activities  (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,severe_problems,Severe problems
+3,problem_frequency,"How often did you have problems in doing your  usual activities   (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,not_at_all,Not at all
+3,problem_frequency,"How often did you have problems in doing your  usual activities   (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,most_of_the_time,Most of the time
+3,problem_frequency,"How often did you have problems in doing your  usual activities   (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,some_of_the_time,Some of the time
+3,problem_frequency,"How often did you have problems in doing your  usual activities   (e.g. work, study, housework, family or leisure activities)  yesterday ?",False,all_of_the_time,All of the time
+4,pain_yesterday,Did you experience any pain  yesterday ?,False,moderate_pain,Moderate pain
+4,pain_yesterday,Did you experience any pain  yesterday ?,False,severe_pain,Severe pain
+4,pain_yesterday,Did you experience any pain  yesterday ?,False,extreme_pain,Extreme pain
+4,pain_yesterday,Did you experience any pain  yesterday ?,False,not_at_all,Not at all
+4,pain_yesterday,Did you experience any pain  yesterday ?,False,slight_pain,Slight pain
+5,pain_frequency,How  often  did you experience pain  yesterday ?,False,all_of_the_time,All of the time
+5,pain_frequency,How  often  did you experience pain  yesterday ?,False,not_at_all,Not at all
+5,pain_frequency,How  often  did you experience pain  yesterday ?,False,some_of_the_time,Some of the time
+5,pain_frequency,How  often  did you experience pain  yesterday ?,False,most_of_the_time,Most of the time
+6,sleep_yesterday,Did you need to sleep during the day  yesterday ?,False,not_at_all,Not at all
+6,sleep_yesterday,Did you need to sleep during the day  yesterday ?,False,yes_once,"Yes, once"
+6,sleep_yesterday,Did you need to sleep during the day  yesterday ?,False,yes_multiple_times,"Yes, multiple times"
+7,depressed_yesterday,I felt depressed  yesterday :,False,slightly,Slightly
+7,depressed_yesterday,I felt depressed  yesterday :,False,moderately,Moderately
+7,depressed_yesterday,I felt depressed  yesterday :,False,not_at_all,Not at all
+7,depressed_yesterday,I felt depressed  yesterday :,False,severely,Severely
+7,depressed_yesterday,I felt depressed  yesterday :,False,extremely,Extremely
+8,depressed_frequency,"Thinking about yesterday , how often were you bothered by feeling down, depressed or hopeless?",False,all_of_the_time,All of the time
+8,depressed_frequency,"Thinking about yesterday , how often were you bothered by feeling down, depressed or hopeless?",False,most_of_the_time,Most of the time
+8,depressed_frequency,"Thinking about yesterday , how often were you bothered by feeling down, depressed or hopeless?",False,not_at_all,Not at all
+8,depressed_frequency,"Thinking about yesterday , how often were you bothered by feeling down, depressed or hopeless?",False,some_of_the_time,Some of the time
+9,tired_yesterday,Did you feel tired  yesterday ?,False,not_at_all,Not at all
+9,tired_yesterday,Did you feel tired  yesterday ?,False,a_little_bit,A little bit
+9,tired_yesterday,Did you feel tired  yesterday ?,False,very_much,Very much
+9,tired_yesterday,Did you feel tired  yesterday ?,False,somewhat,Somewhat
+9,tired_yesterday,Did you feel tired  yesterday ?,False,quite_a_bit,Quite a bit

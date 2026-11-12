@@ -1,0 +1,61 @@
+# Exploratory Data Analysis Report
+
+**Rows:** 5326
+**Columns:** 19
+
+## Data types & missing values
+
+                             dtype  missing
+user_id                        str        0
+activity_date                  str        0
+sleep_duration_min           int64        0
+sleep_efficiency_pct         int64        0
+sleep_fragmentation_index  float64        0
+sleep_onset_latency_min      int64        0
+total_steps                float64        0
+active_minutes               int64        0
+mvpa_minutes                 int64        0
+sedentary_minutes            int64        0
+peak_activity_intensity      int64        0
+resting_hr_bpm               int64        0
+hr_mean_bpm                float64        0
+hr_range_bpm               float64        0
+hr_elevation_ratio         float64        0
+hr_high_intensity_frac     float64        0
+hr_temporal_consistency    float64        0
+fitbit_wear_fraction       float64        0
+tired_yesterday_code         int64        0
+
+## Descriptive statistics (engineered features)
+
+                            count         mean          std        min          25%          50%           75%           max
+sleep_duration_min         5326.0   423.625798   114.692102  51.000000   367.000000   432.000000    486.000000   1375.000000
+sleep_efficiency_pct       5326.0    89.419264    12.739667  23.000000    90.000000    94.000000     96.000000    100.000000
+sleep_fragmentation_index  5326.0     0.013321     0.016902   0.000000     0.003697     0.009174      0.017980      0.484925
+sleep_onset_latency_min    5326.0     3.105708     5.461285   0.000000     0.000000     2.000000      4.000000     93.000000
+total_steps                5326.0  8663.344067  6090.482798   4.000000  4353.500000  7184.500000  11477.750000  50273.000000
+active_minutes             5326.0    58.735637    49.531912   2.000000    24.000000    41.000000     78.000000    492.000000
+mvpa_minutes               5326.0    23.480473    32.126047   1.000000     6.000000    13.000000     26.000000    305.000000
+sedentary_minutes          5326.0   210.947615    90.204994   1.000000   148.000000   202.000000    262.000000    743.000000
+peak_activity_intensity    5326.0  1670.640631  1206.762655   4.000000   698.000000  1201.500000   2690.500000  10653.000000
+resting_hr_bpm             5326.0    66.765490     7.835565  48.000000    62.000000    66.000000     71.000000     97.000000
+hr_mean_bpm                5326.0    76.969233     8.759461  51.938028    71.525960    76.320499     81.691862    122.973799
+hr_range_bpm               5326.0    40.490631    11.914272   0.000000    33.000000    41.000000     45.987500    128.000000
+hr_elevation_ratio         5326.0     1.155424     0.073425   0.835667     1.109229     1.155516      1.187774      1.863239
+hr_high_intensity_frac     5326.0     0.065532     0.065064   0.000000     0.019638     0.047758      0.089315      0.560079
+hr_temporal_consistency    5326.0     0.677194     0.133816  -0.192554     0.611915     0.698479      0.770715      0.941964
+fitbit_wear_fraction       5326.0     0.905268     0.172859   0.000694     0.919618     0.984028      1.000000      1.000000
+
+## Fatigue target distribution
+
+tired_yesterday_code
+0    1162
+1    1864
+2    1019
+3     835
+4     446
+
+## Outlier summary
+
+Rows flagged as outliers (|value‑mean| > 3 × std): 799 of 5326
+

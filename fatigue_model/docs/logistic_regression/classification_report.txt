@@ -1,0 +1,11 @@
+              precision    recall  f1-score   support
+
+  not_at_all       0.48      0.26      0.33       226
+a_little_bit       0.38      0.90      0.53       366
+    somewhat       0.17      0.03      0.05       205
+ quite_a_bit       0.00      0.00      0.00       167
+   very_much       0.00      0.00      0.00        88
+
+    accuracy                           0.37      1052
+   macro avg       0.20      0.24      0.18      1052
+weighted avg       0.27      0.37      0.27      1052
