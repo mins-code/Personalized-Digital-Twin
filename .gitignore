@@ -3,3 +3,7 @@ venv/
 __pycache__/
 *.pyc
 
+fatigue_model/models/*.joblib
+fatigue_model/models/*.pkl
+fatigue_model/models/*.h5
+fatigue_model/models/*.pt

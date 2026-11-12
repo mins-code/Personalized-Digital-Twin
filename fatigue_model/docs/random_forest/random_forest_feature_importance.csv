@@ -1,0 +1,17 @@
+feature,importance
+peak_activity_intensity,0.07843370879576313
+sedentary_minutes,0.07637463334149713
+sleep_duration_min,0.07448012316259167
+hr_mean_bpm,0.07141333831892828
+total_steps,0.07109751027943087
+hr_temporal_consistency,0.06668584660503468
+sleep_fragmentation_index,0.06411711820818422
+hr_elevation_ratio,0.0629748246251986
+active_minutes,0.06151777904710632
+resting_hr_bpm,0.05918910808738309
+hr_high_intensity_frac,0.05883783033570849
+sleep_efficiency_pct,0.0587661467755584
+hr_range_bpm,0.05636338145636703
+fitbit_wear_fraction,0.055257660158822844
+mvpa_minutes,0.04734162493229916
+sleep_onset_latency_min,0.037149365870126114
