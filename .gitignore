@@ -7,3 +7,5 @@ fatigue_model/models/*.joblib
 fatigue_model/models/*.pkl
 fatigue_model/models/*.h5
 fatigue_model/models/*.pt
+# OULAD raw CSVs are ~450 MB (studentVle); get them from the team dataset zip
+score_model/data/raw/
