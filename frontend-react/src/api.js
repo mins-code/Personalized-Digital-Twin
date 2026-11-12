@@ -2,11 +2,10 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_BASE_URL || '',
-  withCredentials: true,  // send Flask session cookie on every request
+  withCredentials: true,
 });
 
 /* ── Auth ───────────────────────────────────────────────── */
-
 export const loginUser = (student_id, password) => {
   const fd = new FormData();
   fd.append('student_id', student_id);
@@ -23,39 +22,36 @@ export const registerUser = (student_id, password, confirm_password) => {
 };
 
 export const logoutUser = () => api.get('/logout');
-
 export const getCurrentUser = () => api.get('/api/me');
 
-/* ── Dashboard ──────────────────────────────────────────── */
-
+/* ── Dashboard & Context ────────────────────────────────── */
 export const getDashboardStats = () => api.get('/api/dashboard-stats');
+export const getDashboardMeta = () => api.get('/api/dashboard-meta');
 
-// NOTE: The Flask backend renders best_time/log_count/shap_path via the
-// HTML template. A /api/dashboard-meta endpoint should be added to Flask
-// so the React client can fetch these values as JSON. For now we fall back
-// to hardcoded defaults while that endpoint exists.
-export const getDashboardMeta = () => api.get('/api/dashboard-meta').catch(() => ({
-  data: { student_id: '', best_time: '10:00', log_count: 0, progress_percentage: 0, shap_path: '' }
-}));
-
-/* ── Study Logs ─────────────────────────────────────────── */
-
-export const addStudyLog = (fields) => {
+/* ── Timetable & Academic Calendar ──────────────────────── */
+export const getAcademicEvents = () => api.get('/api/academic-events');
+export const addAcademicEvent = (event) => api.post('/api/academic-events', event);
+export const uploadSchedulePDF = (file, category) => {
   const fd = new FormData();
-  Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-  return api.post('/log', fd);
+  fd.append('file', file);
+  fd.append('category', category); // 'timetable' or 'calendar'
+  return api.post('/api/upload-schedule', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
 };
 
-export const getStudyLogs = () => api.get('/api/study-logs').catch(() => ({ data: { logs: [] } }));
+/* ── Commute Tracking ───────────────────────────────────── */
+export const getCommuteRecords = () => api.get('/api/commute');
+export const addCommuteRecord = (data) => api.post('/api/commute', data);
 
-export const deleteLog = (log_id) => api.post(`/log/${log_id}/delete`);
+/* ── In-App Study Sessions ──────────────────────────────── */
+export const getStudySessions = () => api.get('/api/study-sessions');
+export const addStudySession = (data) => api.post('/api/study-sessions', data);
 
-/* ── Simulator ──────────────────────────────────────────── */
-
+/* ── What-If Simulator ──────────────────────────────────── */
 export const predictInstant = (data) => api.post('/api/predict-instant', data);
 
 /* ── Syllabus / RAG ─────────────────────────────────────── */
-
 export const uploadSyllabus = (file) => {
   const fd = new FormData();
   fd.append('file', file);
@@ -65,18 +61,15 @@ export const uploadSyllabus = (file) => {
 };
 
 export const listSyllabuses = () => api.get('/api/syllabuses');
-
 export const deleteSyllabus = () => api.post('/api/delete-syllabus');
-
 export const deleteSingleSyllabus = (filename) =>
   api.post('/api/delete-single-syllabus', { filename });
 
 /* ── Quiz ────────────────────────────────────────────────── */
-
 export const generateQuiz = (topic, selected_files, quantity, difficulty) =>
   api.post('/api/generate-quiz', { topic, selected_files, quantity, difficulty });
 
-export const submitQuizScore = (score) => api.post('/api/submit-quiz-score', { score });
+export const submitQuizScore = (score, topic, difficulty, total_questions) => 
+  api.post('/api/submit-quiz-score', { score, topic, difficulty, total_questions });
 
 export default api;
-

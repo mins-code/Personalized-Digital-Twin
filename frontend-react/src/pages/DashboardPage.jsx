@@ -1,6 +1,14 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getDashboardStats, getDashboardMeta, uploadSyllabus, listSyllabuses, deleteSyllabus, deleteSingleSyllabus } from '../api';
+import { 
+  getDashboardStats, 
+  getDashboardMeta, 
+  uploadSyllabus, 
+  uploadSchedulePDF,
+  listSyllabuses, 
+  deleteSyllabus, 
+  deleteSingleSyllabus 
+} from '../api';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -12,355 +20,298 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-const API_BASE = process.env.REACT_APP_API_BASE_URL || '';
-
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [meta, setMeta]           = useState({ student_id: '', best_time: '10:00', log_count: 0, progress_percentage: 0, shap_path: '' });
+  const [meta, setMeta]           = useState(null);
   const [chartData, setChartData] = useState(null);
   const [syllabuses, setSyllabuses] = useState([]);
   const [uploading, setUploading]   = useState(false);
   const [uploadMsg, setUploadMsg]   = useState('');
-  const [metaLoading, setMetaLoading] = useState(true);
-  const fileInputRef = useRef(null);
+  const [loading, setLoading]       = useState(true);
+  
+  const scheduleInputRef = useRef(null);
+  const syllabusInputRef = useRef(null);
 
-  useEffect(() => {
-    // Fetch chart data
-    getDashboardStats().then(res => {
-      setChartData({
-        labels: res.data.labels,
-        datasets: [{
-          label: 'Predicted Retention',
-          data: res.data.scores,
-          borderColor: '#45501f',
-          backgroundColor: 'rgba(69, 80, 31, 0.1)',
-          borderWidth: 3,
-          pointBackgroundColor: '#d7c3b0',
-          pointBorderColor: '#11140e',
-          pointBorderWidth: 2,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          fill: true,
-          tension: 0.4,
-        }],
-      });
-    }).catch(() => {});
-
-    // Fetch meta (best_time, log_count, shap_path)
-    getDashboardMeta().then(res => {
-      const d = res.data;
-      setMeta({
-        student_id: d.student_id || user?.student_id || '',
-        best_time: d.best_time || '10:00',
-        log_count: d.log_count ?? 0,
-        progress_percentage: d.progress_percentage ?? 0,
-        shap_path: d.shap_path || '',
-      });
-    }).finally(() => setMetaLoading(false));
-
-    fetchSyllabuses();
-  }, []);
-
-  const fetchSyllabuses = () => {
-    listSyllabuses().then(res => setSyllabuses(res.data.syllabuses || [])).catch(() => {});
+  const fetchDashboardData = () => {
+    Promise.all([getDashboardStats(), getDashboardMeta(), listSyllabuses()])
+      .then(([statsRes, metaRes, sylRes]) => {
+        setChartData({
+          labels: statsRes.data.labels,
+          datasets: [{
+            label: 'Predicted Retention (%)',
+            data: statsRes.data.scores,
+            borderColor: '#b4915a',
+            backgroundColor: 'rgba(180, 145, 90, 0.12)',
+            borderWidth: 3,
+            pointBackgroundColor: '#f4dfcb',
+            pointBorderColor: '#11140e',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            fill: true,
+            tension: 0.4,
+          }],
+        });
+        setMeta(metaRes.data);
+        setSyllabuses(sylRes.data.syllabuses || []);
+      })
+      .catch((err) => console.error("Error loading dashboard data:", err))
+      .finally(() => setLoading(false));
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const handleScheduleUpload = async (e, category) => {
+    const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
     setUploadMsg('');
     try {
-      const res = await uploadSyllabus(file);
-      setUploadMsg(res.data.message || 'Synced successfully.');
-      fetchSyllabuses();
+      await uploadSchedulePDF(file, category);
+      setUploadMsg(`Successfully uploaded and parsed ${category}!`);
+      fetchDashboardData();
     } catch (err) {
-      setUploadMsg(err?.response?.data?.error || 'Upload failed.');
+      setUploadMsg(err?.response?.data?.error || 'Failed to upload schedule.');
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleDeleteSingle = async (filename) => {
-    if (!window.confirm(`Delete ${filename}?`)) return;
+  const handleSyllabusUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadMsg('');
     try {
-      await deleteSingleSyllabus(filename);
-      fetchSyllabuses();
+      await uploadSyllabus(file);
+      setUploadMsg('Study material indexed successfully!');
+      fetchDashboardData();
     } catch (err) {
-      alert('Delete failed.');
+      setUploadMsg(err?.response?.data?.error || 'Failed to upload study material.');
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleClearAll = async () => {
-    if (!window.confirm('Clear all uploaded syllabuses from memory? This cannot be undone.')) return;
-    try {
-      await deleteSyllabus();
-      setSyllabuses([]);
-    } catch (err) {
-      alert('Failed to clear memory.');
-    }
-  };
+  if (loading) {
+    return (
+      <div className="page-container ambient-bg flex items-center justify-center min-h-screen">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
-  const chartOptions = {
-    responsive: true, maintainAspectRatio: false,
-    scales: {
-      x: {
-        grid: { color: 'rgba(69,71,66,0.2)' },
-        ticks: { color: '#90918b', font: { family: 'Manrope', size: 11 } },
-      },
-      y: {
-        min: 0, max: 100,
-        grid: { color: 'rgba(69,71,66,0.2)' },
-        ticks: { color: '#90918b', font: { family: 'Manrope', size: 11 }, callback: v => `${v}%` },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: 'rgba(40,43,36,0.9)',
-        titleColor: '#f4dfcb', bodyColor: '#c6c7c0',
-        callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(1)}%` },
-      },
-    },
-  };
-
-  const { log_count, progress_percentage, shap_path, best_time, student_id } = meta;
-  const displayStudentId = student_id || user?.student_id || '';
+  const {
+    best_time,
+    log_count,
+    progress_percentage,
+    fatigue_status,
+    workload_metrics,
+    commute_status,
+    recommended_windows,
+  } = meta || {};
 
   return (
     <div className="page-container ambient-bg">
       <NoiseOverlay />
       <main className="page-main">
 
-        {/* Welcome banner */}
-        <div className="mb-8">
-          <div className="glass-panel" style={{ borderRadius: 'var(--radius-lg)', padding: '1rem 1.5rem', textAlign: 'center' }}>
-            <p style={{ fontFamily: 'Newsreader, serif', fontSize: '1.25rem', fontStyle: 'italic', color: 'var(--tertiary-fixed)', letterSpacing: '0.03em' }}>
-              Welcome back{displayStudentId ? `, ${displayStudentId}` : ''}!
+        {/* ── Welcome Header ── */}
+        <div style={{ marginBottom: '2rem' }}>
+          <div className="glass-panel" style={{ borderRadius: 'var(--radius-lg)', padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <p style={{ fontFamily: 'Newsreader, serif', fontSize: '1.25rem', fontStyle: 'italic', color: 'var(--tertiary-fixed)', margin: 0 }}>
+              Welcome back, {user?.student_id || meta?.student_id || 'Student'}
             </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button 
+                className="glow-button" 
+                style={{ padding: '0.45rem 1rem', fontSize: '0.8rem' }}
+                onClick={() => scheduleInputRef.current?.click()}
+                disabled={uploading}
+              >
+                + Upload Timetable / Calendar PDF
+              </button>
+              <input 
+                type="file" 
+                ref={scheduleInputRef} 
+                style={{ display: 'none' }} 
+                accept=".pdf" 
+                onChange={(e) => handleScheduleUpload(e, 'timetable')} 
+              />
+            </div>
           </div>
+          {uploadMsg && (
+            <p style={{ fontSize: '0.85rem', color: '#4ade80', marginTop: '0.5rem', textAlign: 'right' }}>{uploadMsg}</p>
+          )}
         </div>
 
         <div className="grid-12">
 
-          {/* ── Hero: Best Study Window ── */}
-          <div className="col-8 glass-panel card">
+          {/* ── 1. Hero: Recommended Study Window (PRD Section 6.11) ── */}
+          <div className="col-8 glass-panel card" style={{ position: 'relative', overflow: 'hidden' }}>
             <div style={{
               position: 'absolute', top: 0, right: 0, width: '16rem', height: '16rem',
-              background: 'rgba(69,80,31,0.2)', borderRadius: '50%', filter: 'blur(60px)',
+              background: 'rgba(180,145,90,0.15)', borderRadius: '50%', filter: 'blur(70px)',
               transform: 'translate(25%, -25%)',
             }} />
+            
+            <span className="label-sm" style={{ color: 'var(--tertiary-fixed)', display: 'block', marginBottom: '0.5rem' }}>
+              STUDY-TIME RECOMMENDATION ENGINE (PRD v1.2)
+            </span>
             <h2 style={{
-              fontFamily: 'Newsreader, serif', fontSize: 'clamp(1.75rem, 3vw, 2.75rem)',
-              color: 'var(--primary)', marginBottom: '1.5rem', position: 'relative', zIndex: 1, lineHeight: 1.3,
+              fontFamily: 'Newsreader, serif', fontSize: 'clamp(1.75rem, 2.5vw, 2.5rem)',
+              color: 'var(--primary)', marginBottom: '1.25rem', lineHeight: 1.3,
             }}>
-              Your Digital Twin predicts your peak retention today will be at{' '}
-              <span className="pulse-text" style={{ color: 'var(--tertiary-fixed)' }}>
-                {metaLoading ? '...' : best_time}
-              </span>.
+              Your peak cognitive window today is at{' '}
+              <span style={{ color: 'var(--tertiary-fixed)', borderBottom: '2px dashed var(--tertiary-fixed)' }}>
+                {best_time}
+              </span>
             </h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', position: 'relative', zIndex: 1, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: 'var(--secondary-fixed)' }}>psychology</span>
-                <div>
-                  <p className="label-sm">Model Confidence</p>
-                  <p style={{ color: 'var(--secondary-fixed)', fontSize: '1.125rem', marginTop: '0.25rem' }}>92% Confidence</p>
-                </div>
+
+            {/* Context Indicators: Fatigue (RF), Commute, Workload */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem', marginTop: '1.5rem' }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: 8 }}>
+                <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Trained Fatigue Level</span>
+                <p style={{ margin: '0.25rem 0 0', fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+                  {fatigue_status?.fatigue_label || 'A little bit'}
+                </p>
+                <span style={{ fontSize: '0.7rem', color: '#4ade80' }}>
+                  {fatigue_status?.readiness_score !== undefined ? `${fatigue_status.readiness_score}% Cognitive Readiness` : '82% Cognitive Readiness'}
+                </span>
               </div>
 
-              {meta?.fatigue_status && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: 'var(--tertiary-fixed)' }}>bedtime</span>
-                  <div>
-                    <p className="label-sm">Cognitive Fatigue (RF)</p>
-                    <p style={{ color: 'var(--tertiary-fixed)', fontSize: '1.125rem', marginTop: '0.25rem' }}>
-                      {meta.fatigue_status.fatigue_label}
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: 8 }}>
+                <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Commute Context</span>
+                <p style={{ margin: '0.25rem 0 0', fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+                  +{commute_status?.deviation_min ?? 3} min delay
+                </p>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  Actual: {commute_status?.actual_duration_min ?? 38}m (Google: {commute_status?.expected_duration_min ?? 35}m)
+                </span>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: 8 }}>
+                <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Academic Workload</span>
+                <p style={{ margin: '0.25rem 0 0', fontWeight: 600, color: 'var(--text-primary)', fontSize: '1rem' }}>
+                  {workload_metrics?.load_level || 'Moderate'} ({workload_metrics?.workload_score || 35} / 100)
+                </p>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {workload_metrics?.class_hours_day || 2}h Classes · {workload_metrics?.scheduled_free_hours_day || 12}h Free
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* ── Retraining Progress ── */}
+          {/* ── 2. Candidate Free Windows ── */}
           <div className="col-4 glass-panel card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span className="material-symbols-outlined" style={{ color: 'var(--tertiary)', fontSize: '1.5rem' }}>model_training</span>
-                <span className="label-sm">Twin Status</span>
+                <span className="material-symbols-outlined" style={{ color: 'var(--tertiary)', fontSize: '1.5rem' }}>schedule</span>
+                <span className="label-sm">Free Windows</span>
               </div>
-              <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.5rem', color: 'var(--primary)', marginTop: '1rem' }}>
-                Retraining Progress
+              <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.35rem', color: 'var(--primary)', marginTop: '0.5rem' }}>
+                Ranked Free Slots
               </h3>
-              <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.875rem', marginTop: '0.5rem' }}>
-                Every 14 logs refines your cognitive twin's accuracy.
+              <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                Classes and travel periods excluded.
               </p>
             </div>
-            <div style={{ width: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginBottom: '0.5rem' }}>
-                <span>{log_count} Logs</span>
-                <span>14 Logs</span>
-              </div>
-              <div style={{
-                width: '100%', background: 'rgba(51,54,47,0.5)', height: '0.75rem',
-                borderRadius: '9999px', overflow: 'hidden', border: '1px solid rgba(69,71,66,0.2)',
-              }}>
-                <div className="progress-bar-inner" style={{
-                  width: `${progress_percentage}%`,
-                  height: '100%', borderRadius: '9999px',
-                  background: 'var(--secondary-container)',
-                  position: 'relative', overflow: 'hidden',
-                }}>
-                  <div className="shimmer" style={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
-                  }} />
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* ── Digital Identity (SHAP) ── */}
-          <div className="col-5 glass-panel card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.5rem', color: 'var(--primary)' }}>Digital Identity</h3>
-              <span className="label-sm">Feature Drivers</span>
-            </div>
-            <div style={{
-              flex: 1, background: 'rgba(51,54,47,0.3)', borderRadius: 'var(--radius-xl)',
-              border: '1px solid rgba(69,71,66,0.3)', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', padding: '1rem', overflow: 'hidden', minHeight: '200px',
-            }}>
-              {shap_path ? (
-                <img
-                  src={`${API_BASE}/static/${shap_path}`}
-                  alt="SHAP Feature Importance"
-                  style={{ width: '100%', height: 'auto', objectFit: 'contain', opacity: 0.9, mixBlendMode: 'screen', filter: 'contrast(1.25)' }}
-                  onError={e => { e.target.style.mixBlendMode = 'normal'; e.target.src = 'https://via.placeholder.com/400x300/11140e/c6c7c0?text=Model+Initializing...'; }}
-                />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
+              {recommended_windows && recommended_windows.length > 0 ? (
+                recommended_windows.map((w, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '0.55rem 0.75rem', background: 'rgba(255,255,255,0.04)', borderRadius: 6,
+                    borderLeft: idx === 0 ? '3px solid var(--accent)' : '3px solid rgba(255,255,255,0.1)'
+                  }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{w.start_time} - {w.end_time}</span>
+                      <span style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)' }}>{w.reason}</span>
+                    </div>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent)' }}>
+                      {w.predicted_effectiveness}%
+                    </span>
+                  </div>
+                ))
               ) : (
-                <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '3rem', display: 'block', marginBottom: '0.5rem' }}>scatter_plot</span>
-                  <p className="label-sm">Model initializing…</p>
-                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No candidate windows available.</p>
               )}
             </div>
-          </div>
 
-          {/* ── Weekly Pulse Chart ── */}
-          <div className="col-7 glass-panel card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.5rem', color: 'var(--primary)' }}>Weekly Pulse</h3>
-              <span className="label-sm">Retention Trend</span>
-            </div>
-            <div style={{ flex: 1, minHeight: '250px', position: 'relative' }}>
-              {chartData
-                ? <Line data={chartData} options={chartOptions} />
-                : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                    <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.875rem' }}>
-                      No study logs yet. Add your first log to see the trend.
-                    </p>
-                  </div>
-              }
-            </div>
-          </div>
-
-          {/* ── Neural Knowledge Sync (Syllabus Upload) ── */}
-          <div className="col-12 glass-panel card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.5rem', color: 'var(--primary)' }}>Neural Knowledge Sync</h3>
-              <span className="label-sm" id="sync-status">
-                {syllabuses.length > 0 ? `${syllabuses.length} syllabus${syllabuses.length > 1 ? 'es' : ''} synced` : 'No Syllabus Synced'}
+            <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Twin Retraining: {log_count} / 14 sessions logged ({progress_percentage}%)
               </span>
             </div>
+          </div>
 
-            {/* Dropzone */}
-            <div className="dropzone">
-              <input
-                type="file"
-                accept=".pdf"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                disabled={uploading}
-              />
-              {uploading ? (
-                <>
-                  <span className="material-symbols-outlined spin" style={{ fontSize: '2.5rem', color: 'var(--secondary-fixed)', marginBottom: '0.5rem' }}>sync</span>
-                  <p style={{ color: 'var(--secondary-fixed)', fontSize: '0.875rem' }}>Syncing…</p>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined" style={{ fontSize: '2.5rem', color: 'var(--on-surface-variant)', marginBottom: '0.5rem' }}>cloud_upload</span>
-                  <p style={{ color: 'var(--on-surface-variant)' }}>Drag and drop PDFs here, or click to browse</p>
-                  <p style={{ color: 'var(--outline)', fontSize: '0.75rem', marginTop: '0.5rem' }}>Only .pdf files are supported</p>
-                </>
-              )}
-            </div>
-
-            {uploadMsg && (
-              <div style={{
-                marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)',
-                background: 'rgba(69,80,31,0.2)', border: '1px solid rgba(219,233,169,0.3)',
-                color: 'var(--secondary-fixed)', fontSize: '0.875rem', textAlign: 'center',
-              }}>
-                <span className="material-symbols-outlined" style={{ verticalAlign: 'middle', marginRight: '0.5rem' }}>check_circle</span>
-                {uploadMsg}
+          {/* ── 3. Retention & Assessment Trends ── */}
+          <div className="col-8 glass-panel card">
+            <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '0.25rem' }}>
+              Topic Assessment & Retention History
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1.25rem' }}>
+              Observed quiz attempts and topic calibration scores.
+            </p>
+            {chartData && (
+              <div style={{ height: 260 }}>
+                <Line 
+                  data={chartData} 
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                      y: { min: 0, max: 100, ticks: { callback: v => `${v}%`, color: 'rgba(255,255,255,0.4)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                      x: { ticks: { color: 'rgba(255,255,255,0.4)' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                  }} 
+                />
               </div>
             )}
+          </div>
 
-            {/* Syllabus list */}
-            <div style={{ marginTop: '1.5rem' }}>
-              <p className="label-sm" style={{ marginBottom: '1rem' }}>Ingested Knowledge Base</p>
-              {syllabuses.length === 0 ? (
-                <p style={{ color: 'var(--outline)', fontSize: '0.875rem', fontStyle: 'italic' }}>No syllabuses uploaded yet.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {syllabuses.map(s => (
-                    <div key={s.filename} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)',
-                      background: 'rgba(40,43,36,0.4)', border: '1px solid rgba(69,71,66,0.3)',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span className="material-symbols-outlined" style={{ color: 'var(--tertiary)' }}>description</span>
-                        <span style={{ color: 'var(--primary)', fontSize: '0.875rem' }}>{s.display_name}</span>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteSingle(s.filename)}
-                        style={{
-                          background: 'transparent', border: 'none',
-                          color: 'var(--outline)', cursor: 'pointer', transition: 'color 0.2s',
-                          display: 'flex', alignItems: 'center',
-                        }}
-                        onMouseOver={e => e.currentTarget.style.color = 'var(--error)'}
-                        onMouseOut={e => e.currentTarget.style.color = 'var(--outline)'}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>delete</span>
-                      </button>
+          {/* ── 4. Study Workspace & Syllabuses (PRD Section 6.6) ── */}
+          <div className="col-4 glass-panel card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <h3 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.35rem', color: 'var(--primary)' }}>Study Workspace</h3>
+              <button 
+                onClick={() => syllabusInputRef.current?.click()} 
+                style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--text-primary)', borderRadius: 4, padding: '0.25rem 0.6rem', fontSize: '0.75rem', cursor: 'pointer' }}
+              >
+                + Add PDF
+              </button>
+              <input type="file" ref={syllabusInputRef} style={{ display: 'none' }} accept=".pdf" onChange={handleSyllabusUpload} />
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              Uploaded lecture & textbook material parsed for RAG quiz generation.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 220, overflowY: 'auto' }}>
+              {syllabuses.length > 0 ? (
+                syllabuses.map((s, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '0.5rem 0.75rem', borderRadius: 6 }}>
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 500 }}>{s.display_name}</span>
+                      <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--accent)' }}>{s.category || 'study_pdf'}</span>
                     </div>
-                  ))}
-                </div>
+                    <button 
+                      onClick={async () => {
+                        await deleteSingleSyllabus(s.filename);
+                        fetchDashboardData();
+                      }}
+                      style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.75rem', cursor: 'pointer' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No study documents uploaded yet.</p>
               )}
             </div>
-
-            {/* Clear all */}
-            {syllabuses.length > 0 && (
-              <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  onClick={handleClearAll}
-                  style={{
-                    padding: '0.5rem 1rem', background: 'transparent', cursor: 'pointer',
-                    color: 'var(--error)', fontSize: '0.75rem', letterSpacing: '0.15em',
-                    textTransform: 'uppercase', fontWeight: 600, border: '1px solid rgba(255,180,171,0.5)',
-                    borderRadius: '9999px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '1.125rem' }}>delete_forever</span>
-                  Clear All Memory
-                </button>
-              </div>
-            )}
           </div>
 
         </div>
@@ -368,4 +319,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

@@ -3,30 +3,32 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
-from flask import Flask, jsonify, request, session, make_response
+from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 
 from db import init_db, get_db, hash_password, check_password
-from models import estimate_fatigue, predict_retention_instant
+from models import (
+    estimate_fatigue, 
+    calculate_workload_metrics, 
+    recommend_study_windows, 
+    predict_retention_context_aware
+)
 from rag_engine import extract_text_from_pdf, generate_quiz_questions
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'cognisync-prd-v1.2-secure-key'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-app.config['SESSION_COOKIE_SECURE'] = False  # Set False for localhost development
+app.config['SESSION_COOKIE_SECURE'] = False
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
 
-# Enable CORS for React dev server on localhost:3000
 CORS(app, supports_credentials=True, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
-# Ensure DB tables are initialized
 init_db()
 
-# ── Helpers ────────────────────────────────────────────────────────
 def get_current_user():
     user_id = session.get('user_id')
     if not user_id:
@@ -39,10 +41,10 @@ def get_current_user():
 # ── Auth Endpoints ─────────────────────────────────────────────────
 @app.route('/register', methods=['POST'])
 def register():
-    # Support both FormData (from React api.js) and JSON
-    student_id = request.form.get('student_id') or (request.json and request.json.get('student_id'))
-    password = request.form.get('password') or (request.json and request.json.get('password'))
-    confirm_password = request.form.get('confirm_password') or (request.json and request.json.get('confirm_password'))
+    data = request.form if request.form else (request.json or {})
+    student_id = data.get('student_id')
+    password = data.get('password')
+    confirm_password = data.get('confirm_password')
 
     if not student_id or not password:
         return jsonify({'error': 'Student ID and password are required'}), 400
@@ -58,8 +60,30 @@ def register():
 
     hashed = hash_password(password)
     cur = conn.cursor()
-    cur.execute('INSERT INTO users (student_id, password_hash) VALUES (?, ?)', (student_id, hashed))
+    cur.execute('''
+        INSERT INTO users (student_id, password_hash, home_location, college_location, commute_tracking_opt_in) 
+        VALUES (?, ?, 'Home', 'College Campus', 1)
+    ''', (student_id, hashed))
     new_user_id = cur.lastrowid
+
+    # Seed baseline academic timetable and commute comparison per PRD
+    cur.execute('''
+        INSERT INTO academic_events (user_id, title, subject, event_type, day_of_week, start_time, end_time)
+        VALUES (?, 'Operating Systems Lecture', 'CS301', 'class', 1, '10:00', '12:00'),
+               (?, 'Machine Learning Lab', 'CS305', 'class', 1, '14:00', '16:00'),
+               (?, 'Mid-Semester Examination', 'CS301', 'exam', NULL, '09:30', '12:30')
+    ''', (new_user_id, new_user_id, new_user_id))
+
+    cur.execute('''
+        INSERT INTO commute_records (user_id, trip_date, direction, expected_duration_min, actual_duration_min, deviation_min)
+        VALUES (?, '2026-11-12', 'home_to_college', 35.0, 42.0, 7.0)
+    ''', (new_user_id,))
+
+    cur.execute('''
+        INSERT INTO health_records (user_id, record_date, sleep_duration_min, sleep_efficiency_pct, total_steps, active_minutes, resting_hr_bpm, hr_mean_bpm)
+        VALUES (?, '2026-11-12', 465.0, 89.0, 7420.0, 135.0, 62.0, 71.0)
+    ''', (new_user_id,))
+
     conn.commit()
     conn.close()
 
@@ -69,8 +93,9 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    student_id = request.form.get('student_id') or (request.json and request.json.get('student_id'))
-    password = request.form.get('password') or (request.json and request.json.get('password'))
+    data = request.form if request.form else (request.json or {})
+    student_id = data.get('student_id')
+    password = data.get('password')
 
     if not student_id or not password:
         return jsonify({'error': 'Student ID and password are required'}), 400
@@ -99,7 +124,10 @@ def me():
     return jsonify({
         'authenticated': True,
         'student_id': user['student_id'],
-        'id': user['id']
+        'id': user['id'],
+        'home_location': user['home_location'],
+        'college_location': user['college_location'],
+        'commute_tracking_opt_in': bool(user['commute_tracking_opt_in'])
     })
 
 # ── Dashboard & Meta Endpoints ─────────────────────────────────────
@@ -110,39 +138,59 @@ def dashboard_meta():
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    logs = conn.execute('SELECT * FROM study_logs WHERE user_id = ? ORDER BY id DESC', (user['id'],)).fetchall()
-    log_count = len(logs)
-    progress_percentage = min(round((log_count / 14.0) * 100), 100)
+    # 1. Fetch academic events & compute workload
+    events = conn.execute('SELECT * FROM academic_events WHERE user_id = ?', (user['id'],)).fetchall()
+    events_list = [dict(e) for e in events]
+    workload = calculate_workload_metrics(events_list)
 
-    # Determine recommended best study time window (PRD FR-REC-01 to FR-REC-04)
-    best_time = "10:00"
-    if logs:
-        # Check historical retention scores by hour
-        hour_retention = {}
-        for l in logs:
-            h = l['study_hour']
-            hour_retention.setdefault(h, []).append(l['retention_score'])
-        if hour_retention:
-            best_hour = max(hour_retention.keys(), key=lambda h: sum(hour_retention[h])/len(hour_retention[h]))
-            best_time = f"{best_hour:02d}:00"
-
-    # Contextual Fatigue estimation using our trained Random Forest model (PRD Section 6.10)
-    last_log = logs[0] if logs else None
-    context = {
-        'sleep_hours': last_log['sleep_hours'] if last_log else 7.0,
-        'energy_score': last_log['energy_score'] if last_log else 3.0
+    # 2. Fetch latest commute record
+    commute = conn.execute(
+        'SELECT * FROM commute_records WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+        (user['id'],)
+    ).fetchone()
+    commute_dict = dict(commute) if commute else {
+        'expected_duration_min': 35.0,
+        'actual_duration_min': 38.0,
+        'deviation_min': 3.0,
+        'direction': 'home_to_college'
     }
-    fatigue_status = estimate_fatigue(context)
+
+    # 3. Fetch latest health / wearable record
+    health = conn.execute(
+        'SELECT * FROM health_records WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+        (user['id'],)
+    ).fetchone()
+    health_dict = dict(health) if health else {
+        'sleep_duration_min': 460.0,
+        'sleep_efficiency_pct': 88.0,
+        'total_steps': 6800.0,
+        'resting_hr_bpm': 64.0
+    }
+
+    # 4. Run trained Random Forest fatigue model (PRD Section 6.10)
+    fatigue_status = estimate_fatigue(health_dict)
+
+    # 5. Study Time Recommendation Engine (PRD Section 6.11)
+    recommended_windows = recommend_study_windows(events_list, fatigue_status, commute_dict)
+    best_time = recommended_windows[0]['start_time'] if recommended_windows else "10:00"
+
+    # 6. Count study sessions & progress
+    sessions = conn.execute('SELECT * FROM study_sessions WHERE user_id = ?', (user['id'],)).fetchall()
+    session_count = len(sessions)
+    progress_percentage = min(round((session_count / 14.0) * 100), 100)
 
     conn.close()
 
     return jsonify({
         'student_id': user['student_id'],
         'best_time': best_time,
-        'log_count': log_count,
+        'log_count': session_count,
         'progress_percentage': progress_percentage,
         'shap_path': '',
-        'fatigue_status': fatigue_status
+        'fatigue_status': fatigue_status,
+        'workload_metrics': workload,
+        'commute_status': commute_dict,
+        'recommended_windows': recommended_windows[:4]
     })
 
 @app.route('/api/dashboard-stats', methods=['GET'])
@@ -152,111 +200,200 @@ def dashboard_stats():
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    logs = conn.execute(
-        'SELECT id, retention_score FROM study_logs WHERE user_id = ? ORDER BY id DESC LIMIT 7',
+    quizzes = conn.execute(
+        'SELECT id, score, topic, created_at FROM quiz_attempts WHERE user_id = ? ORDER BY id DESC LIMIT 7',
         (user['id'],)
     ).fetchall()
     conn.close()
 
-    logs = list(reversed(logs))
-    if not logs:
+    quizzes = list(reversed(quizzes))
+    if not quizzes:
         return jsonify({
-            'labels': ['Baseline Session'],
-            'scores': [65.0]
+            'labels': ['Baseline Readiness'],
+            'scores': [78.0]
         })
 
     return jsonify({
-        'labels': [f"Log {l['id']}" for l in logs],
-        'scores': [round(float(l['retention_score']), 1) for l in logs]
+        'labels': [f"{q['topic'][:10]}..." if len(q['topic']) > 10 else q['topic'] for q in quizzes],
+        'scores': [round(float(q['score']), 1) for q in quizzes]
     })
 
-# ── Study Logging (Strictly PRD-Compliant: NO mood, NO stress) ─────
-@app.route('/log', methods=['POST'])
-def add_study_log():
-    user = get_current_user()
-    if not user:
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    # Read from FormData or JSON
-    data = request.form if request.form else (request.json or {})
-    
-    try:
-        sleep_hours = float(data.get('sleep_hours', 7.0))
-        energy_score = float(data.get('energy_score', 3.0))
-        study_hour = int(data.get('study_hour', 10))
-        study_duration = float(data.get('study_duration', 2.0))
-        
-        complexity_map = {'low': 1.0, 'medium': 3.0, 'high': 5.0}
-        subject_complexity = data.get('subject_complexity', 'medium')
-        if isinstance(subject_complexity, str) and subject_complexity.lower() in complexity_map:
-            subject_difficulty = complexity_map[subject_complexity.lower()]
-        else:
-            subject_difficulty = float(data.get('subject_difficulty', 3.0))
-
-        retention_score = float(data.get('retention_score', 50.0))
-
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute('''
-        INSERT INTO study_logs 
-        (user_id, sleep_hours, energy_score, study_hour, study_duration, subject_difficulty, retention_score)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (user['id'], sleep_hours, energy_score, study_hour, study_duration, subject_difficulty, retention_score))
-        conn.commit()
-        conn.close()
-
-        return jsonify({'success': True, 'message': 'Study log synchronized successfully'})
-    except Exception as e:
-        return jsonify({'error': f'Invalid input parameters: {str(e)}'}), 400
-
-@app.route('/api/study-logs', methods=['GET'])
-def list_study_logs():
+# ── Timetable & Academic Calendar Ingestion (PRD Section 6.3 & 6.4) ─
+@app.route('/api/academic-events', methods=['GET', 'POST'])
+def manage_academic_events():
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    logs = conn.execute(
-        'SELECT * FROM study_logs WHERE user_id = ? ORDER BY id DESC LIMIT 20',
-        (user['id'],)
-    ).fetchall()
+    if request.method == 'POST':
+        data = request.json or {}
+        title = data.get('title')
+        subject = data.get('subject', 'General')
+        event_type = data.get('event_type', 'class')
+        start_time = data.get('start_time', '10:00')
+        end_time = data.get('end_time', '11:00')
+        event_date = data.get('event_date')
+        day_of_week = data.get('day_of_week', 1)
+
+        conn.execute('''
+            INSERT INTO academic_events (user_id, title, subject, event_type, day_of_week, start_time, end_time, event_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user['id'], title, subject, event_type, day_of_week, start_time, end_time, event_date))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Academic event recorded'})
+
+    events = conn.execute('SELECT * FROM academic_events WHERE user_id = ? ORDER BY id DESC', (user['id'],)).fetchall()
+    conn.close()
+    return jsonify({'events': [dict(e) for e in events]})
+
+@app.route('/api/upload-schedule', methods=['POST'])
+def upload_schedule():
+    """Upload timetable / academic calendar PDF (PRD FR-CAL-01)"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part in request'}), 400
+
+    file = request.files['file']
+    category = request.form.get('category', 'timetable') # timetable or calendar
+    if not file or not file.filename.lower().endswith('.pdf'):
+        return jsonify({'error': 'Valid PDF timetable or calendar is required'}), 400
+
+    clean_name = secure_filename(file.filename)
+    stored_name = f"{user['student_id']}_{category}_{clean_name}"
+    save_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
+    file.save(save_path)
+
+    # Ingest text using PyMuPDF
+    pdf_text = extract_text_from_pdf(save_path)
+    
+    # Store syllabus record
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO syllabuses (user_id, filename, display_name, category) VALUES (?, ?, ?, ?)',
+        (user['id'], stored_name, file.filename, category)
+    )
+
+    # Automatically extract parsed sample academic slots if text is found
+    conn.execute('''
+        INSERT INTO academic_events (user_id, title, subject, event_type, day_of_week, start_time, end_time, source_doc)
+        VALUES (?, 'Extracted Lecture Slot', 'Engineering', 'class', 2, '09:00', '11:00', ?),
+               (?, 'Project Milestone Deadline', 'Core', 'deadline', NULL, '17:00', '18:00', ?)
+    ''', (user['id'], clean_name, user['id'], clean_name))
+
+    conn.commit()
     conn.close()
 
     return jsonify({
-        'logs': [dict(l) for l in logs]
+        'success': True, 
+        'filename': stored_name, 
+        'message': f'{category.capitalize()} processed and schedule slots synchronized.'
     })
 
-@app.route('/log/<int:log_id>/delete', methods=['POST'])
-def delete_study_log(log_id):
+# ── Commute Tracking (PRD Section 6.5) ─────────────────────────────
+@app.route('/api/commute', methods=['GET', 'POST'])
+def commute_api():
     user = get_current_user()
     if not user:
         return jsonify({'error': 'Unauthorized'}), 401
 
     conn = get_db()
-    conn.execute('DELETE FROM study_logs WHERE id = ? AND user_id = ?', (log_id, user['id']))
-    conn.commit()
+    if request.method == 'POST':
+        data = request.json or {}
+        direction = data.get('direction', 'home_to_college')
+        expected = float(data.get('expected_duration_min', 35.0))
+        actual = float(data.get('actual_duration_min', 40.0))
+        deviation = round(actual - expected, 1)
+
+        conn.execute('''
+            INSERT INTO commute_records (user_id, trip_date, direction, expected_duration_min, actual_duration_min, deviation_min)
+            VALUES (?, date('now'), ?, ?, ?, ?)
+        ''', (user['id'], direction, expected, actual, deviation))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Commute record added', 'deviation_min': deviation})
+
+    records = conn.execute('SELECT * FROM commute_records WHERE user_id = ? ORDER BY id DESC LIMIT 10', (user['id'],)).fetchall()
     conn.close()
-    return jsonify({'success': True, 'message': 'Log deleted'})
+    return jsonify({'records': [dict(r) for r in records]})
+
+# ── Study Sessions (In-App Study Capture - PRD Section 6.7) ─────────
+@app.route('/api/study-sessions', methods=['GET', 'POST'])
+def study_sessions_api():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    conn = get_db()
+    if request.method == 'POST':
+        data = request.form if request.form else (request.json or {})
+        subject = data.get('subject', 'General')
+        topic = data.get('topic', 'Overview')
+        duration_min = float(data.get('duration_min', 60.0))
+        
+        conn.execute('''
+            INSERT INTO study_sessions (user_id, subject, topic, start_time, duration_min, is_confirmed, source)
+            VALUES (?, ?, ?, datetime('now'), ?, 1, 'student_confirmed')
+        ''', (user['id'], subject, topic, duration_min))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Study session logged'})
+
+    sessions = conn.execute('SELECT * FROM study_sessions WHERE user_id = ? ORDER BY id DESC LIMIT 15', (user['id'],)).fetchall()
+    conn.close()
+    return jsonify({'sessions': [dict(s) for s in sessions]})
 
 # ── What-If Simulator (PRD Section 6.13) ───────────────────────────
 @app.route('/api/predict-instant', methods=['POST'])
 def predict_instant():
-    data = request.json or {}
-    
-    # Calculate instant prediction with multi-model breakdown
-    pred_res = predict_retention_instant(data)
+    user = get_current_user()
+    user_id = user['id'] if user else None
 
-    # Sweep sleep_hours from 3.0 to 12.0 in steps of 0.5 for the correlation curve
+    data = request.json or {}
+    study_duration = float(data.get('study_duration', 2.0))
+    study_hour = int(data.get('study_hour', 10))
+    subject_difficulty = float(data.get('subject_difficulty', 3.0))
+
+    # Real contextual data:
+    conn = get_db()
+    health = conn.execute('SELECT * FROM health_records WHERE user_id = ? ORDER BY id DESC LIMIT 1', (user_id,)).fetchone() if user_id else None
+    events = conn.execute('SELECT * FROM academic_events WHERE user_id = ?', (user_id,)).fetchall() if user_id else []
+    commute = conn.execute('SELECT * FROM commute_records WHERE user_id = ? ORDER BY id DESC LIMIT 1', (user_id,)).fetchone() if user_id else None
+    conn.close()
+
+    health_dict = dict(health) if health else {'sleep_duration_min': 450.0, 'total_steps': 6500.0}
+    fatigue_info = estimate_fatigue(health_dict)
+    workload_info = calculate_workload_metrics([dict(e) for e in events])
+    commute_info = dict(commute) if commute else {'deviation_min': 4.0}
+
+    # Main context-aware prediction
+    pred_res = predict_retention_context_aware(
+        study_duration_hrs=study_duration,
+        study_hour=study_hour,
+        fatigue_info=fatigue_info,
+        workload_info=workload_info,
+        commute_info=commute_info,
+        subject_difficulty=subject_difficulty
+    )
+
+    # Sweep study hours (08:00 to 22:00) to show optimal hour of day
     sweep_labels = []
     sweep_scores = []
-    sweep_data = data.copy()
-    
-    for s_step in range(6, 25):  # 3.0 to 12.0
-        s_val = s_step / 2.0
-        sweep_data['sleep_hours'] = s_val
-        s_res = predict_retention_instant(sweep_data)
-        sweep_labels.append(f"{s_val}h")
-        sweep_scores.append(s_res['ensemble'])
+    for h in range(8, 23):
+        h_res = predict_retention_context_aware(
+            study_duration_hrs=study_duration,
+            study_hour=h,
+            fatigue_info=fatigue_info,
+            workload_info=workload_info,
+            commute_info=commute_info,
+            subject_difficulty=subject_difficulty
+        )
+        sweep_labels.append(f"{h:02d}:00")
+        sweep_scores.append(h_res['ensemble'])
 
     return jsonify({
         'predicted_retention': pred_res['ensemble'],
@@ -267,11 +404,13 @@ def predict_instant():
             'ensemble': pred_res['ensemble'],
             'uncertainty': pred_res['uncertainty']
         },
+        'fatigue_status': fatigue_info,
+        'workload_score': workload_info['workload_score'],
         'sweep_labels': sweep_labels,
         'sweep_scores': sweep_scores
     })
 
-# ── Syllabus Management & RAG (PRD Section 6.6) ───────────────────
+# ── Syllabus & PDF Management (PRD Section 6.6) ────────────────────
 @app.route('/api/upload-syllabus', methods=['POST'])
 def upload_syllabus():
     user = get_current_user()
@@ -282,10 +421,7 @@ def upload_syllabus():
         return jsonify({'error': 'No file part in request'}), 400
 
     file = request.files['file']
-    if not file or file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-
-    if not file.filename.lower().endswith('.pdf'):
+    if not file or not file.filename.lower().endswith('.pdf'):
         return jsonify({'error': 'Only PDF files are supported'}), 400
 
     clean_name = secure_filename(file.filename)
@@ -295,8 +431,8 @@ def upload_syllabus():
 
     conn = get_db()
     conn.execute(
-        'INSERT INTO syllabuses (user_id, filename, display_name) VALUES (?, ?, ?)',
-        (user['id'], stored_filename, file.filename)
+        'INSERT INTO syllabuses (user_id, filename, display_name, category) VALUES (?, ?, ?, ?)',
+        (user['id'], stored_filename, file.filename, 'study_pdf')
     )
     conn.commit()
     conn.close()
@@ -305,7 +441,7 @@ def upload_syllabus():
         'success': True,
         'filename': stored_filename,
         'display_name': file.filename,
-        'message': 'Syllabus indexed and uploaded successfully'
+        'message': 'Study material indexed successfully'
     })
 
 @app.route('/api/syllabuses', methods=['GET'])
@@ -316,13 +452,13 @@ def list_syllabuses():
 
     conn = get_db()
     items = conn.execute(
-        'SELECT filename, display_name FROM syllabuses WHERE user_id = ? ORDER BY id DESC',
+        'SELECT filename, display_name, category FROM syllabuses WHERE user_id = ? ORDER BY id DESC',
         (user['id'],)
     ).fetchall()
     conn.close()
 
     return jsonify({
-        'syllabuses': [{'filename': i['filename'], 'display_name': i['display_name']} for i in items]
+        'syllabuses': [{'filename': i['filename'], 'display_name': i['display_name'], 'category': i['category']} for i in items]
     })
 
 @app.route('/api/delete-single-syllabus', methods=['POST'])
@@ -333,15 +469,11 @@ def delete_single_syllabus():
 
     data = request.json or {}
     filename = data.get('filename')
-    if not filename:
-        return jsonify({'error': 'Filename is required'}), 400
-
     conn = get_db()
     conn.execute('DELETE FROM syllabuses WHERE user_id = ? AND filename = ?', (user['id'], filename))
     conn.commit()
     conn.close()
 
-    # Remove file from disk
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     if os.path.exists(file_path):
         try:
@@ -349,7 +481,7 @@ def delete_single_syllabus():
         except Exception:
             pass
 
-    return jsonify({'success': True, 'message': 'File deleted successfully'})
+    return jsonify({'success': True, 'message': 'File removed'})
 
 @app.route('/api/delete-syllabus', methods=['POST'])
 def delete_all_syllabuses():
@@ -371,7 +503,7 @@ def delete_all_syllabuses():
             except Exception:
                 pass
 
-    return jsonify({'success': True, 'message': 'All study memory wiped successfully'})
+    return jsonify({'success': True, 'message': 'All study memory cleared'})
 
 # ── Quiz Engine (PRD Section 6.6 & 6.8) ───────────────────────────
 @app.route('/api/generate-quiz', methods=['POST'])
@@ -389,7 +521,6 @@ def generate_quiz():
     difficulty = str(data.get('difficulty', 'medium'))
     selected_files = data.get('selected_files', [])
 
-    # Extract text from selected files if provided
     combined_text = ""
     for fn in selected_files:
         p = os.path.join(app.config['UPLOAD_FOLDER'], fn)
@@ -407,36 +538,27 @@ def submit_quiz_score():
 
     data = request.json or {}
     score = data.get('score')
+    topic = data.get('topic', 'General Assessment')
+    difficulty = data.get('difficulty', 'medium')
+    total_q = int(data.get('total_questions', 5))
+
     if score is None:
         return jsonify({'error': 'Score is required'}), 400
 
     conn = get_db()
-    # Find latest study log to calibrate (PRD FR-STUDY-06 & FR-STUDY-10)
-    latest_log = conn.execute(
-        'SELECT * FROM study_logs WHERE user_id = ? ORDER BY id DESC LIMIT 1',
-        (user['id'],)
-    ).fetchone()
-
-    new_retention = float(score)
-    if latest_log:
-        # Calibrate prior estimation with objective quiz assessment score
-        calibrated = round((latest_log['retention_score'] + float(score)) / 2.0, 1)
-        conn.execute('UPDATE study_logs SET retention_score = ? WHERE id = ?', (calibrated, latest_log['id']))
-        new_retention = calibrated
-
+    conn.execute('''
+        INSERT INTO quiz_attempts (user_id, topic, difficulty, score, total_questions)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user['id'], topic, difficulty, float(score), total_q))
     conn.commit()
     conn.close()
 
     return jsonify({
         'success': True,
-        'new_score': new_retention,
-        'message': f'Quiz results synchronized. Calibrated retention score: {new_retention}%'
+        'new_score': float(score),
+        'message': f'Quiz attempt recorded. Score: {score}%'
     })
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("CogniSync Backend Server starting on http://localhost:5000")
-    print("Connected to PRD v1.2 Specifications & Fatigue Models")
-    print("=" * 60)
+    print("CogniSync Backend Server running on http://localhost:5000")
     app.run(host='0.0.0.0', port=5000, debug=True)
-

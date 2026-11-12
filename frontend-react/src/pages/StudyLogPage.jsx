@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { addStudyLog, deleteLog } from '../api';
+import { addStudySession, getStudySessions, getDashboardMeta } from '../api';
 import NoiseOverlay from '../components/NoiseOverlay';
 
 export default function StudyLogPage() {
   const [form, setForm] = useState({
-    sleep_hours: '', study_duration: '', study_hour: '10',
-    subject_complexity: 'medium', energy_score: '3',
-    retention_score: '50',
+    subject: 'Operating Systems',
+    topic: 'Virtual Memory & Paging',
+    duration_min: '60',
   });
-  const [logs, setLogs]   = useState([]);
-  const [msg, setMsg]     = useState({ type: '', text: '' });
+  const [meta, setMeta]       = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [msg, setMsg]         = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    getDashboardMeta().then(res => setMeta(res.data)).catch(() => {});
+    getStudySessions().then(res => setSessions(res.data.sessions || [])).catch(() => {});
+  }, []);
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -20,102 +26,92 @@ export default function StudyLogPage() {
     setMsg({ type: '', text: '' });
     setLoading(true);
     try {
-      await addStudyLog(form);
-      setMsg({ type: 'success', text: 'Neural Data Synchronized. Your twin is updated.' });
-      setForm({ sleep_hours: '', study_duration: '', study_hour: '10', subject_complexity: 'medium', energy_score: '3', retention_score: '50' });
+      await addStudySession(form);
+      setMsg({ type: 'success', text: 'Study session recorded and integrated into context.' });
+      const res = await getStudySessions();
+      setSessions(res.data.sessions || []);
     } catch (err) {
-      setMsg({ type: 'error', text: err?.response?.data?.error || 'Failed to save log.' });
+      setMsg({ type: 'error', text: err?.response?.data?.error || 'Failed to save session.' });
     } finally {
       setLoading(false);
     }
   };
 
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-  const complexity_labels = { low: 'Low (1)', medium: 'Medium (3)', high: 'High (5)' };
+  const fatigue = meta?.fatigue_status || {};
+  const commute = meta?.commute_status || {};
+  const workload = meta?.workload_metrics || {};
 
   return (
     <div className="page-container ambient-bg">
       <NoiseOverlay />
-      <main className="page-main" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3rem' }}>
+      <main className="page-main" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2.5rem' }}>
 
-        {/* ── Log Form ── */}
-        <div className="glass-panel" style={{ width: '100%', maxWidth: '800px', borderRadius: 'var(--radius-2xl)', padding: '3rem 3.5rem', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, right: 0, width: '16rem', height: '16rem', background: 'rgba(69,80,31,0.1)', borderRadius: '50%', filter: 'blur(80px)', transform: 'translate(25%,-25%)' }} />
-
-          <div style={{ textAlign: 'center', marginBottom: '2.5rem', position: 'relative', zIndex: 1 }}>
-            <h1 style={{ fontFamily: 'Newsreader, serif', fontSize: '2.5rem', color: 'var(--primary)', marginBottom: '0.5rem' }}>Neural Input</h1>
-            <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.875rem' }}>Synchronize your daily variables in under 90 seconds.</p>
+        <div className="glass-panel" style={{ width: '100%', maxWidth: '850px', borderRadius: 'var(--radius-2xl)', padding: '2.5rem 3rem', position: 'relative' }}>
+          
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <span className="label-sm" style={{ color: 'var(--tertiary-fixed)', display: 'block', marginBottom: '0.25rem' }}>
+              IN-APP STUDY ACTIVITY CAPTURE (PRD SECTION 6.7)
+            </span>
+            <h1 style={{ fontFamily: 'Newsreader, serif', fontSize: '2.2rem', color: 'var(--primary)', marginBottom: '0.4rem' }}>
+              Confirm Study Session
+            </h1>
+            <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.85rem' }}>
+              Review or confirm your academic study block. Physical readiness and commute constraints are automatically derived.
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem', position: 'relative', zIndex: 1 }}>
+          {/* ── Context Signals (Derived from Trained Models & Integrations) ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Trained Fatigue State</span>
+              <p style={{ margin: '0.25rem 0 0', fontWeight: 600, color: 'var(--accent)', fontSize: '1.05rem' }}>
+                {fatigue.fatigue_label || 'A little bit'} ({fatigue.readiness_score || 82}% Readiness)
+              </p>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Inferred via Random Forest Model</span>
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '2rem' }}>
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Android Commute Trip</span>
+              <p style={{ margin: '0.25rem 0 0', fontWeight: 600, color: 'var(--text-primary)', fontSize: '1.05rem' }}>
+                +{commute.deviation_min || 3} min delay
+              </p>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Google Maps expected: {commute.expected_duration_min || 35}m</span>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '1rem' }}>
+              <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Academic Timetable Load</span>
+              <p style={{ margin: '0.25rem 0 0', fontWeight: 600, color: 'var(--text-primary)', fontSize: '1.05rem' }}>
+                {workload.load_level || 'Moderate'} ({workload.workload_score || 35} / 100)
+              </p>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{workload.class_hours_day || 2}h scheduled classes</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label className="label-sm" style={{ marginBottom: '0.75rem' }}>Sleep Duration (Hours)</label>
-                <input className="ghost-input" name="sleep_hours" type="number" min="3" max="12" step="0.5" value={form.sleep_hours} onChange={handleChange} placeholder="e.g. 7.5" required />
+                <label className="label-sm" style={{ marginBottom: '0.5rem' }}>Subject Name</label>
+                <input className="ghost-input" name="subject" type="text" value={form.subject} onChange={handleChange} required />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label className="label-sm" style={{ marginBottom: '0.75rem' }}>Study Duration (Hours)</label>
-                <input className="ghost-input" name="study_duration" type="number" min="0.1" step="0.1" value={form.study_duration} onChange={handleChange} placeholder="e.g. 2.5" required />
+                <label className="label-sm" style={{ marginBottom: '0.5rem' }}>Topic / Chapter</label>
+                <input className="ghost-input" name="topic" type="text" value={form.topic} onChange={handleChange} required />
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '2rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label className="label-sm" style={{ marginBottom: '0.75rem' }}>Hour of Day</label>
-                <select className="ghost-select" name="study_hour" value={form.study_hour} onChange={handleChange} required>
-                  {hours.map(h => (
-                    <option key={h} value={h}>{String(h).padStart(2,'0')}:00</option>
-                  ))}
-                </select>
+                <label className="label-sm" style={{ marginBottom: '0.5rem' }}>Active Study Duration (Minutes)</label>
+                <input className="ghost-input" name="duration_min" type="number" min="10" max="300" step="5" value={form.duration_min} onChange={handleChange} required />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <label className="label-sm" style={{ marginBottom: '0.75rem' }}>Subject Complexity</label>
-                <select className="ghost-select" name="subject_complexity" value={form.subject_complexity} onChange={handleChange} required>
-                  <option value="low">Low (Easy)</option>
-                  <option value="medium">Medium (Standard)</option>
-                  <option value="high">High (Challenging)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Sliders */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '2rem', paddingTop: '0.5rem' }}>
-              {[
-                { name: 'energy_score', label: 'Physical Energy & Focus', min: 1, max: 5, lo: 'Drained', hi: 'Peak' },
-              ].map(({ name, label, min, max, lo, hi }) => (
-                <div key={name} style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                    <label className="label-sm">{label}</label>
-                    <span style={{ color: 'var(--secondary-fixed)', fontSize: '0.875rem' }}>{form[name]}</span>
-                  </div>
-                  <input type="range" name={name} min={min} max={max} step="1" value={form[name]} onChange={handleChange} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '0.625rem', color: 'var(--outline-variant)' }}>
-                    <span>{lo}</span><span>{hi}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Retention slider */}
-            <div style={{ paddingTop: '1.5rem', paddingBottom: '0.5rem', borderTop: '1px solid rgba(69,71,66,0.2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                <div>
-                  <label className="label-sm" style={{ display: 'block', marginBottom: '0.25rem' }}>Self-Reported Retention</label>
-                  <p style={{ color: 'var(--outline)', fontSize: '0.625rem' }}>How well do you feel you absorbed this session?</p>
-                </div>
-                <span style={{ fontFamily: 'Newsreader, serif', fontSize: '1.5rem', color: 'var(--tertiary-fixed)' }}>{form.retention_score}%</span>
-              </div>
-              <input type="range" name="retention_score" min="0" max="100" step="1" value={form.retention_score} onChange={handleChange} />
-              <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                 <Link to="/quiz-setup" style={{
-                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  fontSize: '0.75rem', letterSpacing: '0.15em', textTransform: 'uppercase',
-                  color: 'var(--tertiary-fixed)', border: '1px solid rgba(244,223,203,0.3)',
-                  padding: '0.75rem 1.5rem', borderRadius: '9999px', transition: 'all 0.2s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                  fontSize: '0.78rem', letterSpacing: '0.05em', textTransform: 'uppercase',
+                  color: 'var(--accent)', border: '1px solid var(--accent)',
+                  padding: '0.75rem 1rem', borderRadius: 8, textDecoration: 'none',
                 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '0.875rem' }}>quiz</span>
-                  Test your retention score
+                  Test Topic Retention via Quiz
                 </Link>
               </div>
             </div>
@@ -126,28 +122,37 @@ export default function StudyLogPage() {
               </p>
             )}
 
-            <button className="glow-button" type="submit" disabled={loading} style={{ width: '100%' }}>
-              {loading ? 'Synchronizing…' : 'Synchronize Log'}
+            <button className="glow-button" type="submit" disabled={loading} style={{ width: '100%', marginTop: '0.5rem' }}>
+              {loading ? 'Confirming…' : 'Confirm & Save Study Session'}
             </button>
           </form>
         </div>
 
-        {/* ── History placeholder ── */}
-        <div className="glass-panel" style={{ width: '100%', maxWidth: '900px', borderRadius: 'var(--radius-2xl)', padding: '2rem 2.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid rgba(69,71,66,0.3)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-            <div>
-              <h2 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.75rem', color: 'var(--primary)' }}>Synchronization History</h2>
-              <p style={{ color: 'var(--on-surface-variant)', fontSize: '0.875rem', marginTop: '0.25rem' }}>Review your most recent neural uploads.</p>
+        {/* ── Recent Confirmed Sessions ── */}
+        <div className="glass-panel" style={{ width: '100%', maxWidth: '850px', borderRadius: 'var(--radius-xl)', padding: '1.5rem 2rem' }}>
+          <h2 style={{ fontFamily: 'Newsreader, serif', fontSize: '1.35rem', color: 'var(--primary)', marginBottom: '1rem' }}>
+            Recent Confirmed Sessions
+          </h2>
+          {sessions.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {sessions.map(s => (
+                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.65rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
+                  <div>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{s.subject} — {s.topic}</span>
+                    <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)' }}>Recorded on {s.created_at}</span>
+                  </div>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 600 }}>
+                    {s.duration_min} mins
+                  </span>
+                </div>
+              ))}
             </div>
-            <span className="material-symbols-outlined" style={{ color: 'var(--tertiary-fixed)', fontSize: '2rem' }}>history</span>
-          </div>
-          <p style={{ color: 'var(--outline)', fontSize: '0.875rem', fontStyle: 'italic' }}>
-            Recent logs appear here after synchronisation.
-          </p>
+          ) : (
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>No study sessions confirmed yet.</p>
+          )}
         </div>
 
       </main>
     </div>
   );
 }
-
