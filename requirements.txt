@@ -1,8 +1,28 @@
-pandas
-numpy
-scikit-learn
-matplotlib
-seaborn
-jupyter
-xgboost
-joblib
+# Core Web Framework & API
+Flask>=3.0.0
+flask-cors>=4.0.0
+Werkzeug>=3.0.0
+
+# Database & ORM
+SQLAlchemy>=2.0.0
+
+# Machine Learning & Data Processing
+numpy>=1.26.0
+pandas>=2.0.0
+scikit-learn>=1.4.0
+scipy>=1.12.0
+xgboost>=2.0.0
+joblib>=1.3.0
+shap>=0.44.0
+
+# Document Ingestion & PDF Processing (RAG)
+PyMuPDF>=1.23.0
+
+# Visualization & Data Analysis
+matplotlib>=3.8.0
+seaborn>=0.13.0
+jupyter>=1.0.0
+
+# Environment & Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0
